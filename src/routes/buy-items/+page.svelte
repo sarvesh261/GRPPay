@@ -1,29 +1,90 @@
 <script>
     import { fade, slide } from 'svelte/transition';
+    import { onMount } from 'svelte';
 
-    let balance = 1000; // We'll later integrate this with a store or backend
-    let showPopup = false;
-    let popupMessage = '';
-    let popupType = '';
-
-    let items = [
-        { id: 1, name: 'Sandwich', price: 45 },
-        { id: 2, name: 'Burger', price: 60 },
-        { id: 3, name: 'Pizza', price: 120 },
-        { id: 4, name: 'French Fries', price: 40 },
-        { id: 5, name: 'Cold Coffee', price: 50 },
-        { id: 6, name: 'Ice Cream', price: 35 },
-        { id: 7, name: 'Pasta', price: 80 },
-        { id: 8, name: 'Noodles', price: 70 },
-        { id: 9, name: 'Samosa', price: 15 },
-        { id: 10, name: 'Tea', price: 12 }
-    ];
-
+    let balance = 0;
+    // @ts-ignore
+    /**
+     * @type {any[]}
+     */
+    let items = [];
     // @ts-ignore
     /**
      * @type {any[]}
      */
     let cart = [];
+    // @ts-ignore
+    let currentUser = null;
+    // @ts-ignore
+    let currentGroup = null;
+    let showPopup = false;
+    let popupMessage = '';
+    let popupType = '';
+
+    onMount(async () => {
+        const userData = localStorage.getItem('user');
+        const groupData = localStorage.getItem('currentGroup');
+        
+        if (userData) {
+            currentUser = JSON.parse(userData);
+            balance = currentUser.balance;
+        }
+        
+        if (groupData) {
+            currentGroup = JSON.parse(groupData);
+        }
+
+        // Fetch items from database
+        try {
+            const response = await fetch('/api/items');
+            const data = await response.json();
+            if (data.items && Array.isArray(data.items)) {
+                items = data.items;
+                console.log('Fetched items:', items); // Debug log
+            } else {
+                console.error('Invalid items data:', data);
+            }
+        } catch (error) {
+            console.error('Failed to fetch items:', error);
+        }
+    });
+
+    async function handleCheckout() {
+        try {
+            const response = await fetch('/api/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    // @ts-ignore
+                    groupId: currentGroup.id,
+                    // @ts-ignore
+                    purchaserId: currentUser.user_id,
+                    // @ts-ignore
+                    items: cart
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                balance = data.newBalance;
+                cart = [];
+                showNotification('Purchase successful!', 'success');
+            } else {
+                showNotification(data.message, 'error');
+            }
+        } catch (error) {
+            showNotification('Failed to process checkout', 'error');
+        }
+    }
+
+    // @ts-ignore
+    function showNotification(message, type) {
+        popupMessage = message;
+        popupType = type;
+        showPopup = true;
+        setTimeout(() => showPopup = false, 3000);
+    }
 
     // @ts-ignore
     function addToCart(item) {
@@ -31,25 +92,7 @@
         cart = [...cart, item];
     }
 
-   // @ts-ignore
-     function showNotification(message, type) {
-         popupMessage = message;
-         popupType = type;
-         showPopup = true;
-         setTimeout(() => {
-             showPopup = false;
-         }, 3000);
-     }
 
-     function handleCheckout() {
-         if (totalAmount <= balance) {
-             balance -= totalAmount;
-             showNotification('Purchase successful! Your balance has been updated.', 'success');
-             cart = [];
-         } else {
-             showNotification('Not enough balance!', 'error');
-         }
-     }
 
    // @ts-ignore
      $: totalAmount = cart.reduce((sum, item) => sum + item.price, 0);

@@ -1,11 +1,34 @@
 <script>
-  let username = '';
-  let password = '';
+    import { goto } from '$app/navigation';
+    import { fade } from 'svelte/transition';
 
-  function handleLogin() {
-    // Login logic will be implemented later
-    window.location.href = '/dashboard';
-  }
+    let username = '';
+    let password = '';
+    let error = '';
+
+    async function handleLogin() {
+        try {
+            const response = await fetch('/api/auth', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Store user data in session/localStorage
+                localStorage.setItem('user', JSON.stringify(data.user));
+                goto('/dashboard');
+            } else {
+                error = data.message;
+            }
+        } catch (err) {
+            error = 'Failed to connect to server';
+        }
+    }
 </script>
 
 <div class="login-container">

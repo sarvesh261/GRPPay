@@ -1,31 +1,103 @@
 <script>
+    // @ts-ignore
+    // @ts-ignore
+    // @ts-ignore
     import { fade, slide, scale } from 'svelte/transition';
+    import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
 
-  let balance = 1000;
-  // @ts-ignore
-  /**
-     * @type {string | any[]}
-     */
-  let members = [];
-  let newMember = { username: '', password: '' };
-  let showCard = false;
-
-  function addMember() {
+    let balance = 0;
     // @ts-ignore
-    members = [...members, { ...newMember }];
-    newMember = { username: '', password: '' };
-  }
+    /**
+     * @type {any[]}
+     */
+    let members = [];
+    let newMember = { username: '', password: '' };
+    let showCard = false;
+    // @ts-ignore
+    /**
+     * @type {{ balance: number; user_id: any; } | null}
+     */
+    let currentUser = null;
+    // @ts-ignore
+    // @ts-ignore
+    // @ts-ignore
+    let error = '';
+    // @ts-ignore
+    let successMessage = '';
+    // @ts-ignore
+    let showSuccessPopup = false;
 
-  function createGroup() {
-    showCard = true;
-  }
+    onMount(() => {
+        const userData = localStorage.getItem('user');
+        if (userData) {
+            currentUser = JSON.parse(userData);
+            // @ts-ignore
+            balance = currentUser.balance;
+        }
+    });
 
+    async function addMember() {
+        try {
+            const response = await fetch('/api/verify-member', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newMember)
+            });
 
-    
+            const data = await response.json();
+            if (data.success) {
+                // @ts-ignore
+                members = [...members, { username: newMember.username }];
+                newMember = { username: '', password: '' };
+                error = '';
+            } else {
+                error = 'Invalid member credentials';
+            }
+        } catch (err) {
+            error = 'Failed to add member';
+        }
+    }
 
-    function proceedToBuyItems() {
-        goto('/buy-items');
+    async function proceedToBuyItems() {
+        try {
+            const response = await fetch('/api/update-balances', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    // @ts-ignore
+                    creator: currentUser.user_id,
+                    // @ts-ignore
+                    members: members.map(m => m.username)
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                balance = data.newBalance;
+                // @ts-ignore
+                currentUser = { ...currentUser, balance: data.newBalance };
+                localStorage.setItem('user', JSON.stringify(currentUser));
+                localStorage.setItem('currentGroup', JSON.stringify(data.group));
+                
+                // Show success message
+                successMessage = `Balances updated! Your new balance: ₹${data.newBalance}`;
+                showSuccessPopup = true;
+                
+                // Navigate after a short delay
+                setTimeout(() => {
+                    goto('/buy-items');
+                }, 1500);
+            } else {
+                error = data.message || 'Failed to update balances';
+            }
+        } catch (err) {
+            error = 'Failed to update balances and create group';
+        }
+    }
+
+    function createGroup() {
+        showCard = true;
     }
 </script>
 
@@ -34,7 +106,7 @@
     <div class="header-content" in:fade={{ duration: 500 }}>
       <h1>Dashboard</h1>
       <div class="user-info">
-        <span class="username">Welcome, User</span>
+        <span class="username">Welcome, {currentUser?.user_id}</span>
         <span class="balance">₹{balance}</span>
       </div>
     </div>
