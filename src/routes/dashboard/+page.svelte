@@ -99,11 +99,20 @@
     function createGroup() {
         showCard = true;
     }
+
+    function goToBuyItems() {
+        goto('/buy-items');
+    }
+
+    function goToLogin() {
+        goto('/');
+    }
 </script>
 
 <div class="dashboard">
   <header>
     <div class="header-content" in:fade={{ duration: 500 }}>
+      <button class="back-btn" on:click={goToLogin}>Back</button> <!-- Added Back button -->
       <h1>Dashboard</h1>
       <div class="user-info">
         <span class="username">Welcome, {currentUser?.user_id}</span>
@@ -157,6 +166,7 @@
         {/if}
       </div>
     {/if}
+    <button class="buy-items-btn" on:click={goToBuyItems}>Buy Items</button>
   </main>
 </div>
 
@@ -180,6 +190,22 @@
     justify-content: space-between;
     align-items: center;
     animation: slideDown 0.5s ease-out;
+  }
+
+  .back-btn {
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    border-radius: 8px;
+    background-color: var(--dark-red);
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.3s;
+  }
+
+  .back-btn:hover {
+    background-color: #B03030;
+    transform: scale(1.05);
   }
 
   .welcome-section {
@@ -363,5 +389,19 @@
     border: none;
     margin: 1rem;
     cursor: pointer;
+    margin-top: 2rem;
+    transition: background-color 0.3s, transform 0.3s;
+  }
+  .buy-items-btn:hover {
+    background-color: #B03030;
+    transform: scale(1.05);
+  }
+  .buy-items-btn {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    border-radius: 8px;
+    align-items: center;
+    margin-left: 300px;
+    margin-top: 20px;
   }
 </style>

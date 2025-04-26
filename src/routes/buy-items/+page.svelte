@@ -52,6 +52,7 @@
     });
 
     // @ts-ignore
+    // @ts-ignore
     function addToCart(item) {
         cart = [...cart, item];
     }
@@ -64,7 +65,9 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    // @ts-ignore
                     groupId: currentGroup?.id,
+                    // @ts-ignore
                     purchaserId: currentUser?.user_id,
                     items: cart.map(item => ({
                         id: parseInt(item.id, 10),
@@ -88,6 +91,7 @@
         }
     }
 
+    // @ts-ignore
     function showNotification(message, type, redirect = false) {
         popupMessage = message;
         popupType = type;
@@ -107,10 +111,12 @@
         window.location.href = '/';
     }
 
+    // @ts-ignore
     function removeFromCart(item) {
         cart = cart.filter(cartItem => cartItem.id !== item.id);
     }
 
+    // @ts-ignore
     function updateCart(item, quantity) {
         const existingItem = cart.find(cartItem => cartItem.id === item.id);
         if (existingItem) {
@@ -122,6 +128,9 @@
             cart = [...cart, { ...item, quantity }];
         }
     }
+
+    $: suggestedItems = items.filter(item => parseFloat(item.price) <= balance);
+
 </script>
 
 <div class="buy-items">
@@ -148,6 +157,21 @@
             </div>
         {/each}
     </main></div>
+
+    {#if suggestedItems.length > 0}
+    <div class="suggestions-section">
+        <h2>Suggestions for You</h2>
+        <div class="suggestions-grid">
+            {#each suggestedItems as item (item.id)}
+                <div class="suggestion-card">
+                    <h3>{item.name}</h3>
+                    <p>₹{item.price}</p>
+                    <button on:click={() => updateCart(item, 1)}>Add to Cart</button>
+                </div>
+            {/each}
+        </div>
+    </div>
+    {/if}
 
     {#if cart.length > 0}
     <div class="wrap">
@@ -270,6 +294,40 @@
         border: 1px solid #ddd; /* Light border */
         border-radius: 8px; /* Rounded corners */
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+    }
+    .suggestions-section {
+        margin-top: 40px;
+        padding: 20px;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .suggestions-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+    }
+    .suggestion-card {
+        background-color: white;
+        border: 1px solid #ddd;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }
+    .suggestion-card button {
+        margin-top: 1rem;
+        padding: 5px 10px;
+        font-size: 1rem;
+        color: white;
+        background-color: #D84040;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+    .suggestion-card button:hover {
+        background-color: #B03030;
     }
     .popup {
         position: fixed;
