@@ -32,6 +32,7 @@
 </script>
 
 <div class="login-container">
+  <div class="logo">GroupPay</div> <!-- Added logo -->
   <form on:submit|preventDefault={handleLogin}>
     <h1>Login</h1>
     <input
@@ -52,8 +53,18 @@
   .login-container {
     height: 100vh;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
+  }
+
+  .logo {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: var(--deep-red);
+    margin-bottom: 6rem;
+    text-align: center;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   }
 
   form {

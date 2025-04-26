@@ -6,10 +6,8 @@ export async function POST({ request }) {
     const { creator, members } = await request.json();
 
     try {
-        // Start transaction
         await query('BEGIN');
 
-        // Calculate total balance to transfer
         let totalTransfer = 0;
         for (const member of members) {
             const memberResult = await query(
@@ -19,17 +17,16 @@ export async function POST({ request }) {
             if (memberResult.rows.length === 0) {
                 throw new Error(`User not found: ${member}`);
             }
-            const memberBalance = memberResult.rows[0].balance;
+            // Convert string to number and handle decimals properly
+            const memberBalance = parseFloat(memberResult.rows[0].balance) || 0;
             totalTransfer += memberBalance;
 
-            // Subtract member balance
             await query(
                 'UPDATE users SET balance = 0 WHERE user_id = $1',
                 [member]
             );
         }
 
-        // Add total transfer to creator's balance
         const creatorResult = await query(
             'SELECT balance FROM users WHERE user_id = $1',
             [creator]
@@ -37,21 +34,23 @@ export async function POST({ request }) {
         if (creatorResult.rows.length === 0) {
             throw new Error(`Creator not found: ${creator}`);
         }
-        const newBalance = creatorResult.rows[0].balance + totalTransfer;
+        
+        // Convert creator's balance to number and calculate new balance
+        const creatorBalance = parseFloat(creatorResult.rows[0].balance) || 0;
+        const newBalance = creatorBalance + totalTransfer;
 
+        // Ensure the balance is properly formatted before updating
         await query(
             'UPDATE users SET balance = $1 WHERE user_id = $2',
-            [newBalance, creator]
+            [newBalance.toFixed(2), creator]
         );
 
-        // Create group
         const groupResult = await query(
             'INSERT INTO groups (by) VALUES ($1) RETURNING id',
             [creator]
         );
         const groupId = groupResult.rows[0].id;
 
-        // Add members to group
         for (const member of members) {
             await query(
                 'INSERT INTO members (id, member_user) VALUES ($1, $2)',
@@ -63,12 +62,12 @@ export async function POST({ request }) {
 
         return json({
             success: true,
-            newBalance,
+            newBalance: parseFloat(newBalance.toFixed(2)),
             group: { id: groupId, creator, members }
         });
     } catch (error) {
         await query('ROLLBACK');
-        console.error('Error in update-balances:', error.message, error.stack);
+        console.error('Error in update-balances:', error);
         return json({
             success: false,
             message: 'Failed to update balances and create group'
