@@ -1,0 +1,45 @@
+:root {
+  --dark-red: #D84040;
+  --deep-red: #A31D1D;
+  --light-beige: #ECDCBF;
+  --very-light-beige: #F8F2DE;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Poppins', sans-serif;
+}
+
+body {
+  background-color: var(--very-light-beige);
+}
+
+button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--dark-red);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+button:hover {
+  background-color: var(--deep-red);
+  transform: scale(1.05);
+}
+
+input {
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--dark-red);
+  box-shadow: 0 0 5px rgba(216, 64, 64, 0.3);
+}
