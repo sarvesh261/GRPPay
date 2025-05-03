@@ -25,12 +25,24 @@
         const groupData = localStorage.getItem('currentGroup');
         
         if (userData) {
-            currentUser = JSON.parse(userData);
-            balance = currentUser.balance;
+            try {
+                currentUser = JSON.parse(userData);
+                // Ensure balance is a number
+                balance = Number(currentUser.balance) || 0;
+                console.log('Loaded user data:', currentUser);
+                console.log('Current balance:', balance);
+            } catch (e) {
+                console.error('Error parsing user data:', e);
+                showNotification('Error loading user data', 'error');
+            }
         }
         
         if (groupData) {
-            currentGroup = JSON.parse(groupData);
+            try {
+                currentGroup = JSON.parse(groupData);
+            } catch (e) {
+                console.error('Error parsing group data:', e);
+            }
         }
 
         // Fetch items from the server
@@ -41,35 +53,56 @@
                 // @ts-ignore
                 items = data.items.map(item => ({
                     ...item,
-                    id: item.item_id // Ensure 'id' is set to a unique property
+                    id: item.item_id, // Ensure 'id' is set to a unique property
+                    price: Number(item.price) // Ensure price is a number
                 }));
             } else {
                 console.error('Invalid items data:', data);
+                showNotification('Failed to load items', 'error');
             }
         } catch (error) {
             console.error('Failed to fetch items:', error);
+            showNotification('Failed to connect to server', 'error');
         }
     });
 
+    // Calculate total amount with proper number handling
+    $: totalAmount = cart.reduce((sum, item) => {
+        const price = Number(item.price) || 0;
+        const quantity = Number(item.quantity) || 1;
+        return sum + (price * quantity);
+    }, 0);
+
+    // @ts-ignore
     // @ts-ignore
     function addToCart(item) {
         cart = [...cart, item];
     }
 
-    $: totalAmount = cart.reduce((sum, item) => sum + parseFloat(item.price), 0);
-
     async function handleCheckout() {
         try {
+            if (cart.length === 0) {
+                showNotification('Your cart is empty', 'error');
+                return;
+            }
+
+            if (totalAmount > balance) {
+                showNotification('Insufficient balance', 'error');
+                return;
+            }
+
             const response = await fetch('/api/checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    // @ts-ignore
                     groupId: currentGroup?.id,
+                    // @ts-ignore
                     purchaserId: currentUser?.user_id,
                     items: cart.map(item => ({
                         id: parseInt(item.id, 10),
                         price: parseFloat(item.price),
-                        quantity: 1 // Assuming quantity is 1 for simplicity
+                        quantity: item.quantity || 1
                     }))
                 })
             });
@@ -77,17 +110,26 @@
             const data = await response.json();
             
             if (data.success) {
-                balance = data.newBalance;
+                // Update local balance
+                balance = Number(data.newBalance);
+                // Update user in localStorage
+                // @ts-ignore
+                if (currentUser) {
+                    currentUser.balance = balance;
+                    localStorage.setItem('user', JSON.stringify(currentUser));
+                }
                 cart = [];
                 showNotification('Thank you! Come again.', 'success', true);
             } else {
-                showNotification(data.message, 'error');
+                showNotification(data.message || 'Checkout failed', 'error');
             }
         } catch (error) {
+            console.error('Checkout error:', error);
             showNotification('Failed to process checkout', 'error');
         }
     }
 
+    // @ts-ignore
     function showNotification(message, type, redirect = false) {
         popupMessage = message;
         popupType = type;
@@ -107,10 +149,12 @@
         window.location.href = '/';
     }
 
+    // @ts-ignore
     function removeFromCart(item) {
         cart = cart.filter(cartItem => cartItem.id !== item.id);
     }
 
+    // @ts-ignore
     function updateCart(item, quantity) {
         const existingItem = cart.find(cartItem => cartItem.id === item.id);
         if (existingItem) {

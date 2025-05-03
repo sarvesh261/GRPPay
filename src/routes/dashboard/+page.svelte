@@ -5,6 +5,8 @@
     import { fade, slide, scale } from 'svelte/transition';
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
+    // @ts-ignore
+    import QRCode from 'qrcode';
 
     let balance = 0;
     // @ts-ignore
@@ -22,11 +24,17 @@
     // @ts-ignore
     // @ts-ignore
     // @ts-ignore
+    // @ts-ignore
     let error = '';
     // @ts-ignore
     let successMessage = '';
     // @ts-ignore
     let showSuccessPopup = false;
+    
+    // Variables for balance update
+    let showUpdateBalanceForm = false;
+    let amountToAdd = 0;
+    let qrCodeDataUrl = '';
 
     onMount(() => {
         const userData = localStorage.getItem('user');
@@ -99,6 +107,71 @@
     function createGroup() {
         showCard = true;
     }
+
+    function goToBuyItems() {
+        goto('/buy-items');
+    }
+
+    function updateBalance() {
+        showUpdateBalanceForm = true;
+    }
+    
+    function generateQRCode() {
+        const paymentData = `upi://pay?pa=example@upi&pn=User&am=${amountToAdd}&cu=INR`;
+        QRCode.toDataURL(paymentData, (/** @type {any} */ err, /** @type {string} */ url) => {
+            if (err) {
+                console.error('Failed to generate QR code', err);
+            } else {
+                qrCodeDataUrl = url;
+            }
+        });
+    }
+    
+    async function confirmPayment() {
+        try {
+            // Update balance in the database
+            const response = await fetch('/api/update-user-balance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    // @ts-ignore
+                    user_id: currentUser.user_id,
+                    amount_to_add: Number(amountToAdd) // Ensure it's a number
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Update local balance
+                balance = Number(data.new_balance);
+                // Update currentUser object
+                // @ts-ignore
+                currentUser = { ...currentUser, balance: Number(data.new_balance) };
+                localStorage.setItem('user', JSON.stringify(currentUser));
+                
+                // Reset form
+                amountToAdd = 0;
+                qrCodeDataUrl = '';
+                showUpdateBalanceForm = false;
+                
+                // Show success message
+                successMessage = `Payment confirmed! Your new balance: ₹${data.new_balance}`;
+                showSuccessPopup = true;
+                
+                // Navigate to buy items page after a short delay
+                setTimeout(() => {
+                    goto('/buy-items');
+                }, 1500);
+            } else {
+                error = data.message || 'Failed to update balance';
+                console.error('Error from server:', data.message);
+            }
+        } catch (err) {
+            error = 'Failed to update balance';
+            console.error('Error updating balance:', err);
+        }
+    }
 </script>
 
 <div class="dashboard">
@@ -156,6 +229,42 @@
           <button class="proceed" in:fade on:click={proceedToBuyItems}>Proceed</button>
         {/if}
       </div>
+    {/if}
+    <div class="update-balance-section" in:slide={{ duration: 500 }}>
+        <h2>Update Balance</h2>
+        <p>Keep your balance up to date</p>
+        
+        {#if !showUpdateBalanceForm}
+            <button class="update-balance-btn" on:click={updateBalance}>Update Balance</button>
+        {:else}
+            <div class="balance-form" in:slide={{ duration: 300 }}>
+                <div class="input-group">
+                    <input 
+                        type="number" 
+                        placeholder="Enter amount to add" 
+                        bind:value={amountToAdd}
+                        min="1"
+                    />
+                    <button class="generate-qr-btn" on:click={generateQRCode}>Generate QR Code</button>
+                </div>
+                
+                {#if qrCodeDataUrl}
+                    <div class="qr-code-container" in:fade={{ duration: 300 }}>
+                        <img src={qrCodeDataUrl} alt="Payment QR Code" class="qr-code" />
+                        <p class="payment-instructions">Scan this QR code to make payment</p>
+                        <button class="confirm-payment-btn" on:click={confirmPayment}>Confirm Payment</button>
+                    </div>
+                {/if}
+            </div>
+        {/if}
+    </div>
+    
+    <button class="buy-items-btn" on:click={goToBuyItems}>Buy Items</button>
+    
+    {#if showSuccessPopup}
+        <div class="success-popup" in:scale={{ duration: 300, start: 0.8 }}>
+            <p>{successMessage}</p>
+        </div>
     {/if}
   </main>
 </div>
@@ -363,5 +472,116 @@
     border: none;
     margin: 1rem;
     cursor: pointer;
+  }
+
+  .buy-items-btn {
+      padding: 1rem 2rem;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      background-color: var(--dark-red);
+      color: white;
+      border: none;
+      cursor: pointer;
+      margin-top: 2rem;
+      transition: background-color 0.3s, transform 0.3s;
+      display: block; /* Make the button a block element */
+      margin-left: auto; /* Center horizontally */
+      margin-right: auto; /* Center horizontally */
+  }
+
+  .buy-items-btn:hover {
+      background-color: #B03030;
+      transform: scale(1.05);
+  }
+  .update-balance-section {
+      text-align: center;
+      padding: 4rem 2rem;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      margin-top: 2rem;
+      animation: fadeIn 0.5s ease-out;
+  }
+
+  .update-balance-btn {
+      padding: 1rem 2rem;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      background-color: var(--dark-red);
+      color: white;
+      border: none;
+      cursor: pointer;
+      margin-top: 1rem;
+      transition: background-color 0.3s, transform 0.3s;
+  }
+
+  .update-balance-btn:hover {
+      background-color: #B03030;
+      transform: scale(1.05);
+  }
+
+  .balance-form {
+      margin-top: 1.5rem;
+  }
+  
+  .qr-code-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 2rem;
+  }
+  
+  .qr-code {
+      width: 200px;
+      height: 200px;
+      margin-bottom: 1rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 0.5rem;
+      background: white;
+  }
+  
+  .payment-instructions {
+      margin-bottom: 1.5rem;
+      color: #666;
+  }
+  
+  .generate-qr-btn {
+      min-width: 150px;
+      padding: 0.8rem;
+      border-radius: 8px;
+      background-color: var(--dark-red);
+      color: white;
+      border: none;
+      cursor: pointer;
+  }
+  
+  .confirm-payment-btn {
+      padding: 1rem 2rem;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      background-color: var(--deep-red);
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s ease;
+  }
+  
+  .confirm-payment-btn:hover {
+      background-color: #B03030;
+      transform: scale(1.05);
+  }
+  
+  .success-popup {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #4CAF50;
+      color: white;
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      z-index: 1000;
   }
 </style>
