@@ -6,6 +6,7 @@
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
     // @ts-ignore
+    // @ts-ignore
     import QRCode from 'qrcode';
 
     let balance = 0;
@@ -18,7 +19,7 @@
     let showCard = false;
     // @ts-ignore
     /**
-     * @type {{ balance: number; user_id: any; } | null}
+     * @type {{ balance: number; user_id: any; phone?: string; } | null}
      */
     let currentUser = null;
     // @ts-ignore
@@ -34,7 +35,12 @@
     // Variables for balance update
     let showUpdateBalanceForm = false;
     let amountToAdd = 0;
-    let qrCodeDataUrl = '';
+    let phoneNumber = '';
+    let otp = '';
+    let otpSent = false;
+    // Add these missing variables
+    let emailAddress = '';
+    let isLoading = false;
 
     onMount(() => {
         const userData = localStorage.getItem('user');
@@ -42,6 +48,13 @@
             currentUser = JSON.parse(userData);
             // @ts-ignore
             balance = currentUser.balance;
+            
+            // If user has a phone number, pre-fill it
+            // @ts-ignore
+            if (currentUser.phone) {
+                // @ts-ignore
+                phoneNumber = currentUser.phone;
+            }
         }
     });
 
@@ -114,29 +127,76 @@
 
     function updateBalance() {
         showUpdateBalanceForm = true;
+        error = '';
     }
     
-    function generateQRCode() {
-        const paymentData = `upi://pay?pa=example@upi&pn=User&am=${amountToAdd}&cu=INR`;
-        QRCode.toDataURL(paymentData, (/** @type {any} */ err, /** @type {string} */ url) => {
-            if (err) {
-                console.error('Failed to generate QR code', err);
-            } else {
-                qrCodeDataUrl = url;
-            }
-        });
-    }
-    
-    async function confirmPayment() {
+    async function requestOTP() {
+        error = '';
+        isLoading = true;
+        
+        // Validation code...
+        
         try {
-            // Update balance in the database
+            console.log(`Sending OTP request for email: ${emailAddress}`);
+            
             const response = await fetch('/api/update-user-balance', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
-                    // @ts-ignore
-                    user_id: currentUser.user_id,
-                    amount_to_add: Number(amountToAdd) // Ensure it's a number
+                    action: 'generate_otp',
+                    phone_number: phoneNumber,
+                    email: emailAddress,
+                    user_id: currentUser?.user_id
+                })
+            });
+            
+            const data = await response.json();
+            console.log('OTP response:', data);
+            
+            if (data.success) {
+                // Always show OTP in the success message for testing
+                successMessage = `OTP sent to your email (${emailAddress}). For testing, use: ${data.otp}`;
+                
+                showSuccessPopup = true;
+                setTimeout(() => {
+                    showSuccessPopup = false;
+                }, 10000); // Show for 10 seconds
+                
+                otpSent = true;
+            } else {
+                error = data.message || 'Failed to send OTP';
+            }
+        } catch (err) {
+            console.error('Error requesting OTP:', err);
+            error = 'An error occurred while requesting OTP';
+        } finally {
+            isLoading = false;
+        }
+    }
+    
+    async function verifyOTPAndUpdateBalance() {
+        error = '';
+        
+        // Validate OTP
+        if (!otp) {
+            error = 'Please enter the OTP';
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/update-user-balance', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'verify_otp',
+                    phone_number: phoneNumber,
+                    otp: otp,
+                    amount_to_add: amountToAdd,
+                    user_id: currentUser?.user_id
                 })
             });
             
@@ -152,25 +212,34 @@
                 
                 // Reset form
                 amountToAdd = 0;
-                qrCodeDataUrl = '';
+                otp = '';
+                otpSent = false;
                 showUpdateBalanceForm = false;
                 
                 // Show success message
-                successMessage = `Payment confirmed! Your new balance: ₹${data.new_balance}`;
+                successMessage = `Balance updated successfully! New balance: ₹${data.new_balance}`;
                 showSuccessPopup = true;
                 
                 // Navigate to buy items page after a short delay
                 setTimeout(() => {
+                    showSuccessPopup = false;
                     goto('/buy-items');
-                }, 1500);
+                }, 3000);
             } else {
-                error = data.message || 'Failed to update balance';
-                console.error('Error from server:', data.message);
+                error = data.message || 'Failed to verify OTP';
             }
         } catch (err) {
-            error = 'Failed to update balance';
-            console.error('Error updating balance:', err);
+            console.error('Error verifying OTP:', err);
+            error = 'An error occurred while verifying OTP';
         }
+    }
+    
+    function cancelBalanceUpdate() {
+        showUpdateBalanceForm = false;
+        amountToAdd = 0;
+        otp = '';
+        otpSent = false;
+        error = '';
     }
 </script>
 
@@ -238,21 +307,73 @@
             <button class="update-balance-btn" on:click={updateBalance}>Update Balance</button>
         {:else}
             <div class="balance-form" in:slide={{ duration: 300 }}>
+                {#if error}
+                    <div class="error-message">{error}</div>
+                {/if}
+                
                 <div class="input-group">
+                    <label for="phoneNumber">Phone Number</label>
                     <input 
-                        type="number" 
-                        placeholder="Enter amount to add" 
-                        bind:value={amountToAdd}
-                        min="1"
+                        type="tel" 
+                        id="phoneNumber" 
+                        placeholder="Enter your phone number" 
+                        bind:value={phoneNumber}
+                        disabled={otpSent}
                     />
-                    <button class="generate-qr-btn" on:click={generateQRCode}>Generate QR Code</button>
                 </div>
                 
-                {#if qrCodeDataUrl}
-                    <div class="qr-code-container" in:fade={{ duration: 300 }}>
-                        <img src={qrCodeDataUrl} alt="Payment QR Code" class="qr-code" />
-                        <p class="payment-instructions">Scan this QR code to make payment</p>
-                        <button class="confirm-payment-btn" on:click={confirmPayment}>Confirm Payment</button>
+                <div class="input-group">
+                    <label for="email">Email Address</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        placeholder="Enter your email address" 
+                        bind:value={emailAddress}
+                        disabled={otpSent}
+                    />
+                </div>
+                
+                <div class="input-group">
+                    <label for="amount">Amount to Add (₹)</label>
+                    <input 
+                        type="number" 
+                        id="amount" 
+                        placeholder="Enter amount" 
+                        bind:value={amountToAdd}
+                        min="1"
+                        disabled={otpSent}
+                    />
+                </div>
+                
+                {#if !otpSent}
+                    <div class="button-group">
+                        <button class="cancel-btn" on:click={cancelBalanceUpdate}>Cancel</button>
+                        <button class="send-otp-btn" on:click={requestOTP} disabled={isLoading}>
+                            {isLoading ? 'Sending...' : 'Send OTP'}
+                        </button>
+                    </div>
+                {:else}
+                    <div class="otp-section">
+                        <div class="input-group">
+                            <label for="otp">Enter OTP</label>
+                            <input 
+                                type="text" 
+                                id="otp" 
+                                placeholder="Enter 6-digit OTP" 
+                                bind:value={otp}
+                                maxlength="6"
+                                pattern="[0-9]*"
+                                inputmode="numeric"
+                            />
+                        </div>
+                        <p class="otp-info">
+                            We've sent a 6-digit OTP to your email address ({emailAddress.substring(0, 3)}...{emailAddress.substring(emailAddress.indexOf('@'))}).
+                            Please check your inbox (and spam folder) and enter the OTP to verify and update your balance.
+                        </p>
+                        <div class="button-group">
+                            <button class="cancel-btn" on:click={cancelBalanceUpdate}>Cancel</button>
+                            <button class="verify-btn" on:click={verifyOTPAndUpdateBalance}>Verify & Update</button>
+                        </div>
                     </div>
                 {/if}
             </div>
@@ -383,9 +504,7 @@
     margin-top: 2rem;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     /* Remove the slideUp animation since we're using Svelte's slide transition */
-    
-        animation: none;
-    
+    animation: none;
   }
 
   .card-header {
@@ -408,13 +527,17 @@
 
   .input-group {
     display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    margin-bottom: 1.5rem;
+  }
+
+  .input-group label {
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #333;
   }
 
   .input-group input {
-    flex: 1;
-    min-width: 200px;
     padding: 0.8rem;
     border-radius: 8px;
     border: 1px solid #ddd;
@@ -493,6 +616,7 @@
       background-color: #B03030;
       transform: scale(1.05);
   }
+  
   .update-balance-section {
       text-align: center;
       padding: 4rem 2rem;
@@ -522,54 +646,66 @@
 
   .balance-form {
       margin-top: 1.5rem;
+      text-align: left;
   }
   
-  .qr-code-container {
+  .button-group {
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-top: 2rem;
+      gap: 1rem;
+      margin-top: 1.5rem;
   }
   
-  .qr-code {
-      width: 200px;
-      height: 200px;
-      margin-bottom: 1rem;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 0.5rem;
-      background: white;
-  }
-  
-  .payment-instructions {
-      margin-bottom: 1.5rem;
-      color: #666;
-  }
-  
-  .generate-qr-btn {
-      min-width: 150px;
+  .button-group button {
+      flex: 1;
       padding: 0.8rem;
       border-radius: 8px;
-      background-color: var(--dark-red);
-      color: white;
-      border: none;
-      cursor: pointer;
-  }
-  
-  .confirm-payment-btn {
-      padding: 1rem 2rem;
-      font-size: 1.1rem;
-      border-radius: 8px;
-      background-color: var(--deep-red);
-      color: white;
-      border: none;
+      font-weight: bold;
       cursor: pointer;
       transition: all 0.3s ease;
   }
   
-  .confirm-payment-btn:hover {
-      background-color: #B03030;
-      transform: scale(1.05);
+  .cancel-btn {
+      background-color: #f5f5f5;
+      color: #333;
+      border: 1px solid #ddd;
+  }
+  
+  .cancel-btn:hover {
+      background-color: #e5e5e5;
+  }
+  
+  .send-otp-btn, .verify-btn {
+      background-color: var(--deep-red);
+      color: white;
+      border: none;
+  }
+  
+  .send-otp-btn:hover, .verify-btn:hover {
+      background-color: var(--dark-red);
+  }
+  
+  .otp-section {
+      margin-top: 1.5rem;
+      padding: 1.5rem;
+      background-color: #f9f9f9;
+      border-radius: 8px;
+      border: 1px solid #eee;
+  }
+  
+  .otp-info {
+      margin: 1rem 0;
+      color: #666;
+      font-size: 0.9rem;
+      line-height: 1.5;
+  }
+  
+  .error-message {
+      padding: 0.8rem;
+      background-color: #ffebee;
+      color: #c62828;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
   }
   
   .success-popup {
@@ -583,5 +719,13 @@
       border-radius: 8px;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
       z-index: 1000;
+  }
+  
+  /* Define CSS variables */
+  :root {
+      --deep-red: #D84040;
+      --dark-red: #B03030;
+      --light-beige: #F8F2DE;
+      --very-light-beige: #FAF7F0;
   }
 </style>
